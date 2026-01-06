@@ -1,7 +1,7 @@
 # Auto-Evaluation
 
 ## Introduction
-Auto-Evaluation is a multi-chip compatible automatic model evaluation tool built on the Flageval[https://flageval.baai.ac.cn/#/home] platform. It covers three domains: LLM, VLM, and Embodied VLM, and is bound to classic datasets in corresponding fields. Currently, it only supports online evaluation. The tool provides interfaces for starting evaluations, checking evaluation progress, viewing evaluation results, stopping evaluations, resuming evaluations, and analyzing the differences in evaluation results across multiple chips. Whether you are an individual, a team, or an enterprise, as long as you launch the service on compute resources and support public network access, you can use this tool for automatic evaluation.
+Auto-Evaluation is a multi-chip compatible automatic model evaluation tool built on the <a href="https://flageval.baai.ac.cn/#/home" target="_blank">  FlagEval </a> platform. It covers three domains: LLM, VLM, and Embodied VLM, and is bound to classic datasets in corresponding fields. Currently, it only supports online evaluation. The tool provides interfaces for starting evaluations, checking evaluation progress, viewing evaluation results, stopping evaluations, resuming evaluations, and analyzing the differences in evaluation results across multiple chips. Whether you are an individual, a team, or an enterprise, as long as you launch the service on compute resources and support public network access, you can use this tool for automatic evaluation.
 
 ## Tool Description
 ### 1、Address:
