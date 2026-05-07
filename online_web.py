@@ -219,9 +219,10 @@ async def evaluation_diffs(request: DiffsRequest):
 async def stopbatch(request: DiffRequest):
     eval_model,batch_id,details,_ = query(request.request_id)
     print(eval_model, batch_id, request.request_id)
-    response = stop_batch(batch_id) 
     with open("logs/flageval_evaldiffs_infos.json","r") as f:
         taskqueue=json.load(f)
+    region = taskqueue[eval_model].get("region", "bj")
+    response = stop_batch(batch_id, region=region)
     taskqueue[eval_model]["status"]="C"
     taskqueue[eval_model]["retry"]=MAXRETRY
     with open("logs/flageval_evaldiffs_infos.json", "w") as fw:
@@ -287,9 +288,9 @@ async def process_evaluation(request: ProgressRequest):
                     taskqueue=json.load(f)
                     taskinfo = taskqueue[eval_model]
                 if request.domain == "NLP":
-                    loginfos = batchlog(taskinfo["batch_id"],taskinfo["eval_model"], taskinfo["model"], taskinfo["url"], taskinfo["tokenizer"], taskinfo["api_key"], taskinfo["batch_size"], taskinfo["num_concurrent"], taskinfo["num_retry"],taskinfo["max_gen_toks"], taskinfo["gen_kwargs"], taskinfo.get("mode","FlagRelease"),taskinfo.get("user_id",0))
+                    loginfos = batchlog(taskinfo["batch_id"],taskinfo["eval_model"], taskinfo["model"], taskinfo["url"], taskinfo["tokenizer"], taskinfo["api_key"], taskinfo["batch_size"], taskinfo["num_concurrent"], taskinfo["num_retry"],taskinfo["max_gen_toks"], taskinfo["gen_kwargs"], taskinfo.get("mode","FlagRelease"),taskinfo.get("user_id",0), region=taskinfo.get("region","bj"))
                 else:
-                    loginfos = mmbatchlog(taskinfo["batch_id"],taskinfo["eval_model"], taskinfo["model"], taskinfo["url"], taskinfo["tokenizer"], taskinfo["api_key"], taskinfo["batch_size"], taskinfo["num_concurrent"], taskinfo["num_retry"],taskinfo["max_gen_toks"], taskinfo["gen_kwargs"], taskinfo.get("mode","FlagRelease"),taskinfo.get("user_id",0))
+                    loginfos = mmbatchlog(taskinfo["batch_id"],taskinfo["eval_model"], taskinfo["model"], taskinfo["url"], taskinfo["tokenizer"], taskinfo["api_key"], taskinfo["batch_size"], taskinfo["num_concurrent"], taskinfo["num_retry"],taskinfo["max_gen_toks"], taskinfo["gen_kwargs"], taskinfo.get("mode","FlagRelease"),taskinfo.get("user_id",0), region=taskinfo.get("region","bj"))
                 print("loginfos", loginfos)
                 if loginfos["err_code"] == 0:
                     running_progress = loginfos["runningProgress"]

@@ -13,14 +13,14 @@ while True:
             if taskinfo["status"] == "S":
                 continue
             if taskinfo["Domain"] == "NLP":
-                evalinfo = poll_evaluation_progress(taskinfo["batch_id"])
+                evalinfo = poll_evaluation_progress(taskinfo["batch_id"], region=taskinfo.get("region","bj"))
                 if evalinfo["details"]:
                     for detail in evalinfo["details"]:
                         #if detail["status"] == "S" and detail["accuracy"] not None:
                         if detail["accuracy"]:
                             detail["accuracy"] = detail["accuracy"]*100
             else:
-                evalinfo = poll_mm_evaluation_progress(taskinfo["batch_id"])
+                evalinfo = poll_mm_evaluation_progress(taskinfo["batch_id"], region=taskinfo.get("region","bj"))
             print("get status from flagevla", evalinfo)
             if evalinfo["status"] in ["S","DI"]:
                 #taskinfo["details"] = evalinfo["details"]

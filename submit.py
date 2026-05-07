@@ -5,14 +5,39 @@ import hmac, hashlib
 
 
 
-# 生产环境
-base_url = 'https://flageval.baai.ac.cn/api/hf'
-secret = b'M2L84t36MdzwS1Lb'
+# 集群配置表 - 支持多集群路由
+CLUSTER_CONFIG = {
+    "bj": {  # 大兴集群（生产环境）
+        "base_url": "https://flageval.baai.ac.cn/api/hf",
+        "secret": b'M2L84t36MdzwS1Lb',
+        "self_hosted": False,
+    },
+    "sz": {  # 上庄集群（生产环境）
+        "base_url": "https://flageval.baai.ac.cn/api/hf",
+        "secret": b'M2L84t36MdzwS1Lb',
+        "self_hosted": False,
+    },
+    "zhongshi": {  # 中试集群（self-hosted）
+        "base_url": "http://172.31.125.164:18080/api/hf",
+        "secret": b'M2L84t36MdzwS1Lb',
+        "self_hosted": True,
+    },
+    "tianshu": {  # 天数集群（self-hosted）
+        "base_url": "http://10.31.28.82:8080/api/hf",
+        "secret": b'M2L84t36MdzwS1Lb',
+        "self_hosted": True,
+    },
+}
+
+def _get_cluster_config(region):
+    """根据 region 获取对应集群的配置"""
+    if region in CLUSTER_CONFIG:
+        return CLUSTER_CONFIG[region]
+    # 默认走大兴生产环境
+    return CLUSTER_CONFIG["bj"]
+
+# 兼容旧代码
 gpu_id = 'f016ff98-6ec8-4b1e-aed2-9a93753119b2'
-# 测试环境
-#base_url = 'http://120.92.17.239:8080/api/hf'
-#secret = b'Dn29TMCxzvKBGMS8'
-#gpu_id='1ac04795-a552-4f79-8c13-1b43d0f15b17'
 
 redis_map={}
 
@@ -147,7 +172,10 @@ def get_datasetsize():
     return count
 
 def submit_evaluation(model_id, online_model_name, online_url, tokenizer,online_api_key="EMPTY", batch_size=1, num_concurrent=1, num_retry=1, max_gen_toks=-1, gen_kwargs="",mode="FlagRelease", region="bj", special_event="Chips", chip="Nvidia-H100", base_model_name="", user_id=0):
-    url = f'{base_url}/batches'
+    cluster = _get_cluster_config(region)
+    cluster_base_url = cluster["base_url"]
+    cluster_secret = cluster["secret"]
+    url = f'{cluster_base_url}/batches'
     datasets, model_type = [],"Chat"
     if mode == "XLC_infer":
         datasets = XLCInfer_DataSets
@@ -183,7 +211,7 @@ def submit_evaluation(model_id, online_model_name, online_url, tokenizer,online_
 	}
     print(data, type(data))
     raw_body = json.dumps(data)
-    sign, timestamp = generate_signature(secret, url, raw_body)
+    sign, timestamp = generate_signature(cluster_secret, url, raw_body)
 
     headers = {
         'Content-Type': 'application/json',
@@ -217,9 +245,12 @@ def submit_evaluation(model_id, online_model_name, online_url, tokenizer,online_
     return evaluation_info
 
 #def get_evaluation(eval_id):
-def poll_evaluation_progress(batch_id):
-    url = f'{base_url}/batches/{int(batch_id)}'
-    sign, timestamp = generate_signature(secret, url, '')
+def poll_evaluation_progress(batch_id, region="bj"):
+    cluster = _get_cluster_config(region)
+    cluster_base_url = cluster["base_url"]
+    cluster_secret = cluster["secret"]
+    url = f'{cluster_base_url}/batches/{int(batch_id)}'
+    sign, timestamp = generate_signature(cluster_secret, url, '')
 
     headers = {
         'X-Flageval-Sign': sign,
@@ -251,7 +282,10 @@ def poll_evaluation_progress(batch_id):
     return {'status': '未执行成功'}    
 
 def submit_mm_evaluation(model_id, online_url, online_api_key, online_model_name, batch_size=1, num_concurrent=1, num_retry=1, max_gen_toks=-1,thinking=False, retry_time=-1, mode='FlagRelease', region='bj', special_event="Chips", chip="Nvidia-H100", base_model_name="", user_id=0):
-    url = f'{base_url}/mm/batches'
+    cluster = _get_cluster_config(region)
+    cluster_base_url = cluster["base_url"]
+    cluster_secret = cluster["secret"]
+    url = f'{cluster_base_url}/mm/batches'
     mmdataset,runsh,adapter = [],"",""
     if mode == "EmbodiedVerse":
         mmdataset = Embodied_DataSets
@@ -262,7 +296,7 @@ def submit_mm_evaluation(model_id, online_url, online_api_key, online_model_name
     else:
         mmdataset = []
     print(mode, mmdataset)
-       
+
     data = {
             "user_id": user_id,
 	        "require_gpus":0,
@@ -325,7 +359,7 @@ def submit_mm_evaluation(model_id, online_url, online_api_key, online_model_name
         data["retry_time"] =3600
     print("submit mm evaluation", data)
     raw_body = json.dumps(data)
-    sign, timestamp = generate_signature(secret, url, raw_body)
+    sign, timestamp = generate_signature(cluster_secret, url, raw_body)
 
     headers = {
         'Content-Type': 'application/json',
@@ -336,7 +370,7 @@ def submit_mm_evaluation(model_id, online_url, online_api_key, online_model_name
     response = requests.post(url, data=raw_body, headers=headers)
     print("submit_evaluation response",response.text)
     response_data = response.json()
-    
+
     if "detail" in response_data and response_data["detail"] == "A job is still running":
         return {"err_code": 1, "err_msg":"A job is still running"}
     print(response_data)
@@ -354,11 +388,14 @@ def submit_mm_evaluation(model_id, online_url, online_api_key, online_model_name
     #}
     return evaluation_info
 
-def poll_mm_evaluation_progress(batch_id):
+def poll_mm_evaluation_progress(batch_id, region="bj"):
     try:
-        #print("= = b0", base_url, batch_id)
-        url = f'{base_url}/mm/batches/{int(batch_id)}'
-        sign, timestamp = generate_signature(secret, url, '')
+        cluster = _get_cluster_config(region)
+        cluster_base_url = cluster["base_url"]
+        cluster_secret = cluster["secret"]
+        #print("= = b0", cluster_base_url, batch_id)
+        url = f'{cluster_base_url}/mm/batches/{int(batch_id)}'
+        sign, timestamp = generate_signature(cluster_secret, url, '')
 
         headers = {
             'X-Flageval-Sign': sign,
@@ -393,8 +430,11 @@ def poll_mm_evaluation_progress(batch_id):
 def batchresumption(batch_id,model_id, online_model_name, online_url, tokenizer,online_api_key="EMPTY", batch_size=1, num_concurrent=1, num_retry=1, max_gen_toks=-1, gen_kwargs="", mode="FlagRelease", region='bj', user_id=0):
     print("batchresumption",batch_id,model_id, online_model_name, online_url, tokenizer,online_api_key, batch_size, num_concurrent, num_retry, max_gen_toks, gen_kwargs, mode, region, user_id)
     try:
-        #print("= = b0", base_url, batch_id, type(batch_id))
-        url = f'{base_url}/resumebatches'
+        cluster = _get_cluster_config(region)
+        cluster_base_url = cluster["base_url"]
+        cluster_secret = cluster["secret"]
+        #print("= = b0", cluster_base_url, batch_id, type(batch_id))
+        url = f'{cluster_base_url}/resumebatches'
         mmdataset,datasets =[],[]
         if mode == "XLC_infer":
             datasets = XLCInfer_DataSets
@@ -433,7 +473,7 @@ def batchresumption(batch_id,model_id, online_model_name, online_url, tokenizer,
             "joint_region":region
 	    }
         raw_body = json.dumps(data)
-        sign, timestamp = generate_signature(secret, url, raw_body)
+        sign, timestamp = generate_signature(cluster_secret, url, raw_body)
 
         headers = {
             'X-Flageval-Sign': sign,
@@ -452,12 +492,15 @@ def batchresumption(batch_id,model_id, online_model_name, online_url, tokenizer,
         print(f"未知错误: {e}")
         return {'err_code':1, 'message': f'resume evaluation except with: {e}'}
 
-def stop_batch(batch_id):
+def stop_batch(batch_id, region="bj"):
     print("submit stop batch", batch_id)
     try:
-        url = f'{base_url}/stopbatches/{int(batch_id)}'
+        cluster = _get_cluster_config(region)
+        cluster_base_url = cluster["base_url"]
+        cluster_secret = cluster["secret"]
+        url = f'{cluster_base_url}/stopbatches/{int(batch_id)}'
 
-        sign, timestamp = generate_signature(secret, url, "")
+        sign, timestamp = generate_signature(cluster_secret, url, "")
         headers = {
             'X-Flageval-Sign': sign,
             'X-Flageval-Timestamp': timestamp,
@@ -480,11 +523,14 @@ def stop_batch(batch_id):
         return {'err_code':1,'message': f"stop evluation except with:{e}", 'batchId': batch_id}
 
 
-def batchlog(batch_id,model_id, online_model_name, online_url, tokenizer,online_api_key="EMPTY", batch_size=1, num_concurrent=1, num_retry=1, max_gen_toks=-1, gen_kwargs="", mode="FlagRelease", user_id=0):
+def batchlog(batch_id,model_id, online_model_name, online_url, tokenizer,online_api_key="EMPTY", batch_size=1, num_concurrent=1, num_retry=1, max_gen_toks=-1, gen_kwargs="", mode="FlagRelease", user_id=0, region="bj"):
     try:
-        #print("= = b0", base_url, batch_id, type(batch_id))
-        url = f'{base_url}/batchProgress'
-        
+        cluster = _get_cluster_config(region)
+        cluster_base_url = cluster["base_url"]
+        cluster_secret = cluster["secret"]
+        #print("= = b0", cluster_base_url, batch_id, type(batch_id))
+        url = f'{cluster_base_url}/batchProgress'
+
         if mode == "XLC_infer":
             datasets = XLCInfer_DataSets
         elif mode == "XLC_train":
@@ -510,7 +556,7 @@ def batchlog(batch_id,model_id, online_model_name, online_url, tokenizer,online_
             "batch_id":int(batch_id)
 	    }
         raw_body = json.dumps(data)
-        sign, timestamp = generate_signature(secret, url, raw_body)
+        sign, timestamp = generate_signature(cluster_secret, url, raw_body)
 
         headers = {
             'X-Flageval-Sign': sign,
@@ -530,12 +576,15 @@ def batchlog(batch_id,model_id, online_model_name, online_url, tokenizer,online_
         return {'err_code':1, 'message': f'get log except with: {e}'}
 
 
-def mmbatchlog(batch_id,model_id, online_model_name, online_url, tokenizer,online_api_key="EMPTY", batch_size=1, num_concurrent=1, num_retry=1, max_gen_toks=-1, gen_kwargs="", mode="FlagRelease", user_id=0):
+def mmbatchlog(batch_id,model_id, online_model_name, online_url, tokenizer,online_api_key="EMPTY", batch_size=1, num_concurrent=1, num_retry=1, max_gen_toks=-1, gen_kwargs="", mode="FlagRelease", user_id=0, region="bj"):
     try:
-        #print("= = b0", base_url, batch_id, type(batch_id))
-        url = f'{base_url}/mmbatchProgress'
-        #url = f'{base_url}/batcheprogress'
-        
+        cluster = _get_cluster_config(region)
+        cluster_base_url = cluster["base_url"]
+        cluster_secret = cluster["secret"]
+        #print("= = b0", cluster_base_url, batch_id, type(batch_id))
+        url = f'{cluster_base_url}/mmbatchProgress'
+        #url = f'{cluster_base_url}/batcheprogress'
+
         if mode == "XLC_infer":
             datasets = XLCInfer_DataSets
         elif mode == "XLC_train":
@@ -561,7 +610,7 @@ def mmbatchlog(batch_id,model_id, online_model_name, online_url, tokenizer,onlin
             "batch_id":int(batch_id)
 	    }
         raw_body = json.dumps(data)
-        sign, timestamp = generate_signature(secret, url, raw_body)
+        sign, timestamp = generate_signature(cluster_secret, url, raw_body)
 
         headers = {
             'X-Flageval-Sign': sign,
